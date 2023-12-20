@@ -4,7 +4,7 @@ LABEL author="hey@lf.dev"
 # godot version
 ARG GODOT_VERSION="3.5.3"
 
-# install dependencies
+# install base dependencies
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
@@ -13,9 +13,22 @@ RUN apt-get install -y --no-install-recommends \
     git-lfs \
     wget \
     unzip \
+    xvfb \
     zip
 
-# make folders
+# create virtual display (required for running wine apps in headless mode)
+RUN Xvfb :0 -screen 0 1024x768x16 &
+ENV DISPLAY=:0
+
+# install wine (windows builds)
+RUN dpkg --add-architecture i386
+RUN mkdir -pm755 /etc/apt/keyrings
+RUN wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key
+RUN wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/debian/dists/bookworm/winehq-bookworm.sources
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends winehq-stable
+
+# make godot folders
 RUN mkdir -p ~/.cache
 RUN mkdir -p ~/.config/godot
 RUN mkdir -p ~/.local/share/godot/templates
@@ -27,8 +40,19 @@ RUN mv Godot_v${GODOT_VERSION}-stable_linux_headless.64 /usr/local/bin/godot
 RUN chmod +x /usr/local/bin/godot
 RUN rm Godot_v${GODOT_VERSION}-stable_linux_headless.64.zip
 
-# install export templates
+# install godot export templates
 RUN wget https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
 RUN unzip Godot_v${GODOT_VERSION}-stable_export_templates.tpz
 RUN mv templates ~/.local/share/godot/templates/${GODOT_VERSION}.stable
 RUN rm Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+
+# initialize editor settings
+RUN godot -v -e --quit
+
+# install rcedit (windows builds)
+RUN mkdir -v -p /opt/rcedit/bin
+RUN wget https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+RUN mv rcedit-x64.exe /opt/rcedit/bin/rcedit.exe
+RUN chmod +x /opt/rcedit/bin/rcedit.exe
+RUN echo 'export/windows/wine = "/usr/bin/wine"' >> ~/.config/godot/editor_settings-3.tres
+RUN echo 'export/windows/rcedit = "/opt/rcedit/bin/rcedit.exe"' >> ~/.config/godot/editor_settings-3.tres
